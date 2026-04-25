@@ -1,0 +1,191 @@
+# PilotGuard - Global Training Configuration
+# All hyperparameters in one place. Never scatter magic numbers in code.
+
+seed: 42
+
+training:
+  gradient_clip: 1.0
+  mixed_precision: true  # fp16/bf16 on HPC (H200 supports bf16 natively)
+
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+    monitor: "val_f1"
+
+  # Default optimizer (overridden per task below)
+  optimizer:
+    name: "AdamW"
+    lr: 1.0e-4
+    weight_decay: 0.01
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+
+  # Warmup + Cosine Annealing schedule
+  # Phase 1: Linear warmup from lr/25 → lr over warmup_epochs
+  # Phase 2: Cosine decay from lr → min_lr over remaining epochs
+  scheduler:
+    name: "CosineAnnealingWithWarmup"
+    min_lr: 1.0e-6  # Floor for cosine decay
+
+  data:
+    validation_split: 0.15
+    test_split: 0.15
+    stratify_by: "subject_id"  # CRITICAL: no subject overlap between splits
+
+  logging:
+    tool: "tensorboard"
+    log_every_n_steps: 50
+    save_best_model: true
+    save_last_model: true
+
+  # --- Per-dataset training profiles ---
+  # Epoch counts tuned for dataset size + H200 throughput.
+  # Warmup epochs = ~10% of total (enough for LR to stabilize before cosine).
+
+  profiles:
+    # NTHU-DDD: 46,564 train samples — binary drowsiness
+    nthu_drowsiness:
+      dataset: "nthu_ddd"
+      manifest: "data/processed/nthu_ddd_manifest.csv"
+      task: "binary"            # alert vs drowsy
+      num_classes: 2
+      epochs: 50
+      warmup_epochs: 5
+      batch_size: 128
+      lr: 1.0e-3               # Higher LR fine for linear probe
+      weight_decay: 0.01
+      head: "linear"            # Linear probe on DINOv2 features (best for few subjects)
+
+    # UTA-RLDD: 125,490 train samples — binary drowsiness (larger dataset)
+    uta_drowsiness:
+      dataset: "uta_rldd"
+      manifest: "data/processed/uta_rldd_manifest.csv"
+      task: "binary"
+      num_classes: 2
+      epochs: 40
+      warmup_epochs: 3          # 3 epochs warmup → ~2,940 steps
+      batch_size: 128
+      lr: 2.0e-4               # Slightly lower — more data, less overfitting risk
+      weight_decay: 0.01
+      head: "fusion"
+
+    # AffectNet: 19,328 train samples — emotion classification
+    affectnet_emotion:
+      dataset: "affectnet"
+      manifest: "data/processed/affectnet_manifest.csv"
+      task: "multiclass"        # stress (and future: neutral, focused, surprise, fatigue)
+      num_classes: 5
+      epochs: 80
+      warmup_epochs: 8          # Longer warmup for stability
+      batch_size: 64            # Smaller batch for better generalization
+      lr: 5.0e-5               # Lower LR
+      weight_decay: 0.05        # Stronger regularization
+      head: "mlp"               # No geometric features for emotion
+
+    # DISFA: 36,080 train samples — action unit classification
+    disfa_au:
+      dataset: "disfa"
+      manifest: "data/processed/disfa_manifest.csv"
+      task: "multiclass"
+      num_classes: 12            # AU_none + 11 AUs
+      epochs: 50
+      warmup_epochs: 5          # 5 epochs warmup → ~1,410 steps
+      batch_size: 128
+      lr: 2.0e-4
+      weight_decay: 0.02
+      head: "mlp"
+
+  # XGBoost (CPU-based, separate hyperparameters — no warmup needed)
+  xgboost:
+    n_estimators: 1000          # More trees, rely on early stopping
+    max_depth: 6
+    learning_rate: 0.05         # Lower LR + more trees = better generalization
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 3
+    gamma: 0.1                  # Minimum loss reduction for split
+    early_stopping_rounds: 30   # Generous patience with lower LR
+    eval_metric: "logloss"
+
+# Augmentation pipeline (Albumentations)
+augmentation:
+  horizontal_flip: 0.5
+  brightness_contrast:
+    brightness_limit: 0.3
+    contrast_limit: 0.3
+    p: 0.5
+  gaussian_noise:
+    var_limit: [10, 50]
+    p: 0.3
+  clahe:
+    clip_limit: 4.0
+    p: 0.3
+  rotate:
+    limit: 15
+    p: 0.3
+  coarse_dropout:
+    max_holes: 3
+    max_height: 30
+    max_width: 30
+    p: 0.2
+
+# CV Pipeline
+cv:
+  landmark_backend: "mediapipe"  # "mediapipe" or "dlib"
+  frame_width: 640
+  frame_height: 480
+  ear_threshold_multiplier: 0.75  # closed-eye threshold = baseline_EAR * this
+  calibration_duration_seconds: 30
+  perclos_window_seconds: 60
+  microsleep_threshold_ms: 500
+
+# Kalman Filter (EAR smoothing)
+kalman:
+  process_noise: 0.01
+  measurement_noise: 0.1
+  initial_state: [0.3, 0.0]  # [EAR, dEAR/dt]
+
+# Alert Thresholds
+alerts:
+  advisory_threshold: 30
+  caution_threshold: 55
+  warning_threshold: 75
+  cooldown_seconds: 30
+  microsleep_immediate_alert: true
+
+# Fatigue Score Weights (learned later, initial guess)
+fatigue_score:
+  w_perclos: 0.30
+  w_blink_rate: 0.20
+  w_ear_deviation: 0.20
+  w_mar: 0.15
+  w_micro_expression: 0.15
+
+# DINOv2
+dinov2:
+  model_name: "dinov2_vits14"
+  input_size: 224
+  feature_dim: 384
+  run_every_n_frames: 3  # Skip frames for performance
+
+# HMM
+hmm:
+  n_states: 5  # Alert, Mild Fatigue, Fatigued, Microsleep, Incapacitated
+  n_observations_bins: 4  # Discretized observation dimensions
+  n_iter: 100  # Baum-Welch iterations
+
+# LLM
+llm:
+  primary_provider: "openai"
+  primary_model: "gpt-4o"
+  fallback_provider: "ollama"
+  fallback_model: "llama3"
+  rate_limit_seconds: 60
+  max_tokens: 200
+
+# Server
+server:
+  host: "0.0.0.0"
+  port: 8000
+  ws_max_fps: 30
+  session_auto_delete_days: 30

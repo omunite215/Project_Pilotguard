@@ -1,0 +1,126 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Ruff
+.ruff_cache/
+
+# PyTorch / ML
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.joblib
+*.h5
+*.tflite
+*.bin
+!requirements*.txt
+
+# TensorBoard
+runs/
+logs/
+
+# Data (never commit raw/processed data or model weights)
+data/raw/
+data/processed/
+data/synthetic/
+models/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node / Bun
+node_modules/
+.bun/
+bun.lockb
+
+# Frontend build
+frontend/dist/
+frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# dlib model file
+shape_predictor_68_face_landmarks.dat
+
+# Archives
+*.zip
+*.tar.gz
+*.7z
+
+# Misc
+*.log
+*.tmp
+*.bak
+
+# Internal planning and config docs (not part of source)
+.claude/
+CL*.md
+PRD.md
+TRD.md
+instructions.md
+tasks/
+
+# Stale backups
+code update/
+
+# Runtime database
+data/*.db
+
+# Binary artifacts not belonging in repo
+frontend/public/SteamSetup.exe
+*.exe
+
+# Generated presentation binary (regenerate via create_presentation.py)
+docs/PilotGuard_Presentation.pptx
+
+# LaTeX source and build artifacts (report PDF submitted separately)
+*.tex
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Draw.io source (PNG exports kept)
+*.drawio
+
+# PowerPoint
+*.pptx
+
+# References bib (used by LaTeX only)
+docs/references.bib
